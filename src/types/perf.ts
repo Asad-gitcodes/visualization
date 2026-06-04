@@ -28,12 +28,12 @@ export interface PerfProfile {
   rows: PerfRow[];
 }
 
+/**
+ * null means "use per-profile default"; a number means the user has explicitly
+ * overridden the threshold. We use null rather than a sentinel value so that
+ * typing the per-profile default value in the input still behaves as an override.
+ */
 export interface GoNoGoThresholds {
-  maxTtftMs: number;
-  minGenSpeedTps: number;
+  maxTtftMs: number | null;
+  minGenSpeedTps: number | null;
 }
-
-export const DEFAULT_THRESHOLDS: GoNoGoThresholds = {
-  maxTtftMs: 50,
-  minGenSpeedTps: 100,
-};

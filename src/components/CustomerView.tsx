@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { PerfProfile, GoNoGoThresholds, DEFAULT_THRESHOLDS } from "@/types/perf";
+import { PerfProfile, GoNoGoThresholds } from "@/types/perf";
 import { PROFILE_TTFT_SLO, PROFILE_GEN_SPEED_SLO } from "@/lib/profileLabels";
 import {
   ResponsiveContainer,
@@ -13,20 +13,10 @@ import {
   Legend,
 } from "recharts";
 import { Settings2, Info } from "lucide-react";
-
-const COLORS = [
-  "#60a5fa", "#34d399", "#f59e0b", "#f87171", "#a78bfa",
-  "#38bdf8", "#fb923c", "#4ade80", "#e879f9", "#facc15", "#94a3b8",
-];
+import { CHART_COLORS, fmt, TOOLTIP_STYLE } from "@/lib/chartUtils";
 
 interface Props {
   profiles: PerfProfile[];
-}
-
-function fmt(n: number, decimals = 1) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(decimals)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(decimals)}K`;
-  return n.toFixed(decimals);
 }
 
 /**
@@ -61,7 +51,7 @@ function GoNoGoBadge({
 }
 
 export function CustomerView({ profiles }: Props) {
-  const [thresholds, setThresholds] = useState<GoNoGoThresholds>(DEFAULT_THRESHOLDS);
+  const [thresholds, setThresholds] = useState<GoNoGoThresholds>({ maxTtftMs: null, minGenSpeedTps: null });
   const [showThresholds, setShowThresholds] = useState(false);
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
   const [selectedProfileNum, setSelectedProfileNum] = useState<string>("");
@@ -87,7 +77,7 @@ export function CustomerView({ profiles }: Props) {
   filtered.forEach((p) => {
     const key = `${p.model} · ${p.profile}`;
     if (!seriesMap.has(key))
-      seriesMap.set(key, { profile: p, color: COLORS[profiles.indexOf(p) % COLORS.length] });
+      seriesMap.set(key, { profile: p, color: CHART_COLORS[profiles.indexOf(p) % CHART_COLORS.length] });
   });
   const series = Array.from(seriesMap.entries());
 
@@ -106,14 +96,12 @@ export function CustomerView({ profiles }: Props) {
     });
   }
 
-  // SLO resolution: global override > per-profile default
+  // null = use per-profile default; a number = explicit user override
   function ttftSloFor(p: PerfProfile) {
-    if (thresholds.maxTtftMs !== DEFAULT_THRESHOLDS.maxTtftMs) return thresholds.maxTtftMs;
-    return PROFILE_TTFT_SLO[p.profileNum] ?? 50;
+    return thresholds.maxTtftMs ?? PROFILE_TTFT_SLO[p.profileNum] ?? 50;
   }
   function genSpeedSloFor(p: PerfProfile) {
-    if (thresholds.minGenSpeedTps !== DEFAULT_THRESHOLDS.minGenSpeedTps) return thresholds.minGenSpeedTps;
-    return PROFILE_GEN_SPEED_SLO[p.profileNum] ?? 30;
+    return thresholds.minGenSpeedTps ?? PROFILE_GEN_SPEED_SLO[p.profileNum] ?? 30;
   }
 
   function toggleModel(m: string) {
@@ -123,11 +111,6 @@ export function CustomerView({ profiles }: Props) {
       return next;
     });
   }
-
-  const tooltipStyle = {
-    contentStyle: { background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8 },
-    labelStyle: { color: "#a1a1aa" },
-  };
 
   return (
     <div className="space-y-6">
@@ -195,11 +178,11 @@ export function CustomerView({ profiles }: Props) {
                   type="number"
                   min={1}
                   placeholder="auto"
-                  value={thresholds.maxTtftMs === DEFAULT_THRESHOLDS.maxTtftMs ? "" : thresholds.maxTtftMs}
+                  value={thresholds.maxTtftMs ?? ""}
                   onChange={(e) =>
                     setThresholds((t) => ({
                       ...t,
-                      maxTtftMs: e.target.value ? Number(e.target.value) : DEFAULT_THRESHOLDS.maxTtftMs,
+                      maxTtftMs: e.target.value ? Number(e.target.value) : null,
                     }))
                   }
                   className="w-20 bg-zinc-800 border border-zinc-600 rounded px-2 py-0.5 text-zinc-200 focus:outline-none focus:border-blue-500"
@@ -211,11 +194,11 @@ export function CustomerView({ profiles }: Props) {
                   type="number"
                   min={1}
                   placeholder="auto"
-                  value={thresholds.minGenSpeedTps === DEFAULT_THRESHOLDS.minGenSpeedTps ? "" : thresholds.minGenSpeedTps}
+                  value={thresholds.minGenSpeedTps ?? ""}
                   onChange={(e) =>
                     setThresholds((t) => ({
                       ...t,
-                      minGenSpeedTps: e.target.value ? Number(e.target.value) : DEFAULT_THRESHOLDS.minGenSpeedTps,
+                      minGenSpeedTps: e.target.value ? Number(e.target.value) : null,
                     }))
                   }
                   className="w-20 bg-zinc-800 border border-zinc-600 rounded px-2 py-0.5 text-zinc-200 focus:outline-none focus:border-blue-500"
@@ -300,7 +283,7 @@ export function CustomerView({ profiles }: Props) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
                 <XAxis dataKey="batchSize" stroke="#71717a" tick={{ fontSize: 11 }} />
                 <YAxis stroke="#71717a" tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}ms`} />
-                <Tooltip {...tooltipStyle} formatter={(v) => [`${Number(v).toFixed(2)} ms`, ""]} />
+                <Tooltip {...TOOLTIP_STYLE} formatter={(v) => [`${Number(v).toFixed(2)} ms`, ""]} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {series.map(([key, { color }]) => (
                   <Line key={key} type="monotone" dataKey={key} stroke={color} dot={false} strokeWidth={2} />
@@ -318,7 +301,7 @@ export function CustomerView({ profiles }: Props) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
                 <XAxis dataKey="batchSize" stroke="#71717a" tick={{ fontSize: 11 }} />
                 <YAxis stroke="#71717a" tick={{ fontSize: 11 }} tickFormatter={(v) => fmt(v)} />
-                <Tooltip {...tooltipStyle} formatter={(v) => [`${fmt(Number(v))} t/s`, ""]} />
+                <Tooltip {...TOOLTIP_STYLE} formatter={(v) => [`${fmt(Number(v))} t/s`, ""]} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {series.map(([key, { color }]) => (
                   <Line key={key} type="monotone" dataKey={key} stroke={color} dot={false} strokeWidth={2} />
@@ -336,7 +319,7 @@ export function CustomerView({ profiles }: Props) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
                 <XAxis dataKey="batchSize" stroke="#71717a" tick={{ fontSize: 11 }} />
                 <YAxis stroke="#71717a" tick={{ fontSize: 11 }} tickFormatter={(v) => fmt(v)} />
-                <Tooltip {...tooltipStyle} formatter={(v) => [`${fmt(Number(v))} RPM`, ""]} />
+                <Tooltip {...TOOLTIP_STYLE} formatter={(v) => [`${fmt(Number(v))} RPM`, ""]} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {series.map(([key, { color }]) => (
                   <Line key={key} type="monotone" dataKey={key} stroke={color} dot={false} strokeWidth={2} />
